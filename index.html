@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Space Invaders - Quiz Científico</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #gameCanvas {
+      background: #000;
+      border: 1px solid #0a0;
+    }
+
+    #questionBox {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 30, 0, 0.85);
+      padding: 10px;
+      border: 1px solid #0f0;
+      border-radius: 6px;
+      text-align: center;
+      width: 90%;
+      max-width: 500px;
+      color: #0f0;
+      font-size: 14px;
+    }
+
+    #feedback {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 28px;
+      font-weight: bold;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      box-sizing: border-box;
+    }
+
+    #controls > div:first-child {
+      display: flex;
+      gap: 2px; /* CETINHAS APROXIMADAS */
+    }
+
+    .btn {
+      width: 70px;
+      height: 70px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid #0f0;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: #0f0;
+      user-select: none;
+      touch-action: manipulation;
+      font-weight: bold;
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+      background: rgba(0, 255, 255, 0.4);
+    }
+
+    #score {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 20px;
+    }
+
+    #gameOver {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      padding: 20px;
+      border: 2px solid red;
+      border-radius: 10px;
+      text-align: center;
+      display: none;
+    }
+
+    #finalScore {
+      font-size: 24px;
+      color: #0f0;
+      margin-top: 10px;
+    }
+
+    #restartBtn {
+      margin-top: 15px;
+      padding: 10px 20px;
+      background: #0a0;
+      border: none;
+      color: white;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #restartBtn:hover {
+      background: #0c0;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Pontuação: 0</div>
+  <div id="questionBox">
+    <div id="questionText">Carregando pergunta...</div>
+    <div id="optionsText"></div>
+  </div>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  
+  <div id="feedback"></div>
+
+  <div id="gameOver">
+    <div>🎮 GAME OVER</div>
+    <div id="finalScore">Sua pontuação: 0</div>
+    <button id="restartBtn">Recomeçar</button>
+  </div>
+
+  <div id="controls">
+    <div style="display: flex; gap: 2px;">
+      <div class="btn" id="leftBtn">←</div>
+      <div class="btn" id="rightBtn">→</div>
+    </div>
+    <div class="btn" id="fireBtn">🔫</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreDisplay = document.getElementById('score');
+    const questionText = document.getElementById('questionText');
+    const optionsText = document.getElementById('optionsText');
+    const feedbackEl = document.getElementById('feedback');
+    const gameOverDisplay = document.getElementById('gameOver');
+    const finalScoreDisplay = document.getElementById('finalScore');
+    const restartBtn = document.getElementById('restartBtn');
+    const leftBtn = document.getElementById('leftBtn');
+    const rightBtn = document.getElementById('rightBtn');
+    const fireBtn = document.getElementById('fireBtn');
+
+    // Jogador - Nave Espacial Detalhada
+    let player = {
+      x: canvas.width / 2 - 20,
+      y: canvas.height - 50,
+      width: 40,
+      height: 30,
+      speed: 5,
+      dx: 0,
+      pulse: 0 // Para efeito de luz nos propulsores
+    };
+
+    let bullets = [];
+    const bulletSpeed = 7;
+
+    // Sistema de partículas para explosão realista
+    let particles = [];
+
+    let enemies = [];
+    const letters = ['A', 'B', 'C', 'D', 'E'];
+
+    // 🌟 BANCO DE PERGUNTAS — 35 QUESTÕES DE CIÊNCIAS DO 9º ANO
+    const questions = [
+      // Biologia
+      { q: "Qual é a principal função da mitocôndria?", o: ["A) Produzir proteínas", "B) Armazenar DNA", "C) Produzir energia (ATP)", "D) Controlar a entrada de substâncias", "E) Produzir hormônios"], c: 'C' },
+      { q: "O que é um ecossistema?", o: ["A) Um grupo de animais", "B) Somente plantas", "C) Conjunto de seres vivos e seu ambiente", "D) Apenas fatores abióticos", "E) Somente solo e água"], c: 'C' },
+      { q: "Qual é a unidade básica da vida?", o: ["A) Célula", "B) Tecido", "C) Órgão", "D) Sistema", "E) Organismo"], c: 'A' },
+      { q: "Qual processo permite às plantas produzirem seu próprio alimento?", o: ["A) Respiração", "B) Digestão", "C) Fotossíntese", "D) Fermentação", "E) Transpiração"], c: 'C' },
+      { q: "Em qual órgão do corpo humano ocorre a maior parte da digestão dos alimentos?", o: ["A) Estômago", "B) Fígado", "C) Intestino delgado", "D) Intestino grosso", "E) Esôfago"], c: 'C' },
+      { q: "Qual é a função dos glóbulos vermelhos?", o: ["A) Defender o corpo", "B) Coagular o sangue", "C) Transportar oxigênio", "D) Produzir anticorpos", "E) Regular a temperatura"], c: 'C' },
+      { q: "O que é hereditariedade?", o: ["A) A capacidade de se adaptar ao ambiente", "B) A transmissão de características dos pais para os filhos", "C) O processo de mutação genética", "D) A formação de novas espécies", "E) A reprodução assexuada"], c: 'B' },
+      { q: "Qual é o principal gás responsável pelo efeito estufa?", o: ["A) Oxigênio", "B) Nitrogênio", "C) Dióxido de carbono", "D) Hidrogênio", "E) Metano"], c: 'C' },
+      { q: "Como se chama o processo em que plantas perdem água na forma de vapor?", o: ["A) Evaporação", "B) Condensação", "C) Transpiração", "D) Fotossíntese", "E) Respiração"], c: 'C' },
+      { q: "Qual é o papel dos decompositores na cadeia alimentar?", o: ["A) Produzir alimento", "B) Consumir produtores", "C) Degradar matéria orgânica morta", "D) Capturar luz solar", "E) Produzir oxigênio"], c: 'C' },
+
+      // Química
+      { q: "Qual é a fórmula química da água?", o: ["A) H2O2", "B) HO", "C) H2O", "D) H3O", "E) OH2"], c: 'C' },
+      { q: "O que é uma ligação iônica?", o: ["A) Compartilhamento de elétrons", "B) Troca de elétrons entre átomos", "C) Atração entre moléculas polares", "D) Ligação por forças de Van der Waals", "E) Ligação por prótons"], c: 'B' },
+      { q: "Qual é o símbolo químico do ouro?", o: ["A) Ag", "B) Fe", "C) Au", "D) Cu", "E) Pb"], c: 'C' },
+      { q: "O que acontece quando um ácido reage com uma base?", o: ["A) Forma-se um gás", "B) Forma-se um sal e água", "C) Libera calor sem reação", "D) Forma-se um metal", "E) Não ocorre reação"], c: 'B' },
+      { q: "Qual é o estado físico do mercúrio à temperatura ambiente?", o: ["A) Sólido", "B) Líquido", "C) Gasoso", "D) Plasma", "E) Cristalino"], c: 'B' },
+      { q: "O que é uma substância pura?", o: ["A) Mistura de dois ou mais elementos", "B) Substância com composição fixa e propriedades definidas", "C) Solução aquosa", "D) Mistura heterogênea", "E) Elemento radioativo"], c: 'B' },
+      { q: "Qual é o número atômico do oxigênio?", o: ["A) 6", "B) 8", "C) 16", "D) 14", "E) 12"], c: 'B' },
+      { q: "O que caracteriza uma reação química?", o: ["A) Mudança de estado físico", "B) Formação de novas substâncias", "C) Alteração de temperatura", "D) Mudança de cor sem transformação", "E) Apenas mudança de volume"], c: 'B' },
+      { q: "Qual é a fórmula do gás carbônico?", o: ["A) CO", "B) CO2", "C) C2O", "D) H2CO3", "E) O2C"], c: 'B' },
+      { q: "O que é uma solução ácida?", o: ["A) Tem pH maior que 7", "B) Tem pH igual a 7", "C) Tem pH menor que 7", "D) Não conduz eletricidade", "E) É sempre líquida"], c: 'C' },
+
+      // Física
+      { q: "Qual é a unidade de medida da força no Sistema Internacional?", o: ["A) Joule", "B) Pascal", "C) Newton", "D) Watt", "E) Volt"], c: 'C' },
+      { q: "O que é inércia?", o: ["A) A força que freia um objeto", "B) A tendência de um corpo manter seu estado de repouso ou movimento", "C) A aceleração de um corpo", "D) A gravidade da Terra", "E) A resistência do ar"], c: 'B' },
+      { q: "Qual é a velocidade da luz no vácuo?", o: ["A) 300.000 km/h", "B) 30.000 km/s", "C) 300.000 km/s", "D) 3.000 km/s", "E) 3.000 m/s"], c: 'C' },
+      { q: "O que é energia potencial gravitacional?", o: ["A) Energia de movimento", "B) Energia armazenada por causa da posição em um campo gravitacional", "C) Energia do calor", "D) Energia elétrica", "E) Energia sonora"], c: 'B' },
+      { q: "Qual é a lei que diz que a ação e a reação têm mesma intensidade e direção, mas sentidos opostos?", o: ["A) Lei da Gravitação Universal", "B) Primeira Lei de Newton", "C) Segunda Lei de Newton", "D) Terceira Lei de Newton", "E) Lei de Ohm"], c: 'D' },
+      { q: "O que é corrente elétrica?", o: ["A) A diferença de potencial", "B) O fluxo de elétrons em um condutor", "C) A resistência de um material", "D) A quantidade de carga em repouso", "E) A potência elétrica"], c: 'B' },
+      { q: "Qual é a unidade de medida da energia?", o: ["A) Watt", "B) Volt", "C) Joule", "D) Ampère", "E) Ohm"], c: 'C' },
+      { q: "O que é uma onda mecânica?", o: ["A) Onda que não precisa de meio para se propagar", "B) Onda que se propaga apenas no vácuo", "C) Onda que precisa de um meio material para se propagar", "D) Onda eletromagnética", "E) Onda de luz"], c: 'C' },
+      { q: "O que acontece com a pressão em um líquido quando aumentamos a profundidade?", o: ["A) Diminui", "B) Permanece constante", "C) Aumenta", "D) Varia aleatoriamente", "E) Se torna zero"], c: 'C' },
+      { q: "Qual é a fórmula da energia cinética?", o: ["A) E = mgh", "B) E = mc²", "C) E = ½mv²", "D) E = F × d", "E) E = qV"], c: 'C' },
+
+      // Ciências da Terra
+      { q: "Qual é a camada da Terra onde ocorrem os terremotos?", o: ["A) Núcleo", "B) Manto", "C) Crosta", "D) Atmosfera", "E) Hidrosfera"], c: 'C' },
+      { q: "O que é a erosão?", o: ["A) Formação de montanhas", "B) Acúmulo de sedimentos", "C) Desgaste e transporte de rochas e solos", "D) Vulcanismo", "E) Formação de fosséis"], c: 'C' },
+      { q: "Qual é o principal gás da atmosfera terrestre?", o: ["A) Oxigênio", "B) Dióxido de carbono", "C) Nitrogênio", "D) Argônio", "E) Hidrogênio"], c: 'C' },
+      { q: "O que é o ciclo da água?", o: ["A) A transformação de água em vapor", "B) O movimento contínuo da água entre os oceanos, atmosfera e terra", "C) A precipitação de chuva", "D) A filtração da água no solo", "E) A evaporação somente"], c: 'B' },
+      { q: "O que causa as estações do ano?", o: ["A) A rotação da Terra", "B) A mudança na distância da Terra ao Sol", "C) A inclinação do eixo da Terra e sua translação", "D) A atividade solar", "E) A gravidade da Lua"], c: 'C' }
+    ];
+
+    let score = 0;
+    let currentQuestion = null;
+    let gameRunning = true;
+
+    // Mostrar feedback
+    function showFeedback(text, color = '#fff') {
+      feedbackEl.textContent = text;
+      feedbackEl.style.color = color;
+      feedbackEl.style.opacity = '1';
+      setTimeout(() => {
+        feedbackEl.style.opacity = '0';
+      }, 1200);
+    }
+
+    // Criar explosão realista com partículas
+    function createExplosion(x, y) {
+      const colors = ['#ff9000', '#ff5500', '#ff2200', '#ffffff', '#ffcc00'];
+      const particleCount = 80;
+
+      for (let i = 0; i < particleCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 4 + 1;
+        const size = Math.random() * 4 + 1;
+        const life = Math.random() * 60 + 30;
+
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius: size,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          life: life,
+          maxLife: life
+        });
+      }
+    }
+
+    // Atualizar partículas
+    function updateParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.05;
+        p.life--;
+
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    // Desenhar partículas
+    function drawParticles() {
+      for (const p of particles) {
+        const alpha = p.life / p.maxLife;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Nave espacial detalhada
+    function drawPlayer() {
+      const x = player.x;
+      const y = player.y;
+
+      // Sombra suave abaixo da nave
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.ellipse(x + player.width / 2, y + player.height + 10, 20, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Corpo da nave (gradiente prateado)
+      const gradient = ctx.createLinearGradient(x, y, x, y + player.height);
+      gradient.addColorStop(0, '#e0e0ff');
+      gradient.addColorStop(0.5, '#ffffff');
+      gradient.addColorStop(1, '#b0b0ff');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(x + player.width / 2, y);
+      ctx.lineTo(x, y + player.height);
+      ctx.lineTo(x + player.width, y + player.height);
+      ctx.closePath();
+      ctx.fill();
+
+      // Asas (com brilho)
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y + player.height - 3);
+      ctx.lineTo(x - 8, y + player.height + 12);
+      ctx.lineTo(x, y + player.height);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x + player.width, y + player.height - 3);
+      ctx.lineTo(x + player.width + 8, y + player.height + 12);
+      ctx.lineTo(x + player.width, y + player.height);
+      ctx.stroke();
+
+      // Luzes dos propulsores (piscando)
+      player.pulse += 0.1;
+      const pulseIntensity = 0.5 + 0.5 * Math.sin(player.pulse);
+      ctx.fillStyle = `rgba(0, 180, 255, ${pulseIntensity})`;
+      ctx.beginPath();
+      ctx.moveTo(x + 8, y + player.height);
+      ctx.lineTo(x + 12, y + player.height + 10);
+      ctx.lineTo(x + 16, y + player.height);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(x + player.width - 8, y + player.height);
+      ctx.lineTo(x + player.width - 12, y + player.height + 10);
+      ctx.lineTo(x + player.width - 16, y + player.height);
+      ctx.closePath();
+      ctx.fill();
+
+      // Antena (com luz verde)
+      ctx.strokeStyle = '#0f0';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x + player.width / 2, y - 5);
+      ctx.lineTo(x + player.width / 2, y - 12);
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f0';
+      ctx.beginPath();
+      ctx.arc(x + player.width / 2, y - 13, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function loadQuestion() {
+      const q = questions[Math.floor(Math.random() * questions.length)];
+      currentQuestion = q;
+      questionText.textContent = q.q;
+      optionsText.innerHTML = q.o.join('<br>');
+    }
+
+    function spawnEnemies() {
+      enemies = [];
+      for (let i = 0; i < 5; i++) {
+        enemies.push({
+          x: 30 + i * 70,
+          y: Math.random() * 100,
+          width: 30,
+          height: 30,
+          speedX: (Math.random() - 0.5) * 2,
+          speedY: 0.4 + Math.random() * 0.3,
+          letter: letters[i]
+        });
+      }
+    }
+
+    function drawBullets() {
+      for (let b of bullets) {
+        ctx.fillStyle = '#0f0';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0ff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x, b.y + 12);
+        ctx.stroke();
+      }
+    }
+
+    function drawEnemy(e) {
+      ctx.fillStyle = '#0a0';
+      ctx.beginPath();
+      ctx.arc(e.x + e.width / 2, e.y + e.height / 2, e.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#0a0';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(e.x + e.width / 3, e.y + e.height / 3);
+      ctx.lineTo(e.x + e.width / 3 - 6, e.y + e.height / 4 - 4);
+      ctx.moveTo(e.x + 2 * e.width / 3, e.y + e.height / 3);
+      ctx.lineTo(e.x + 2 * e.width / 3 + 6, e.y + e.height / 4 - 4);
+      ctx.stroke();
+
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(e.x + e.width / 3, e.y + e.height / 3, 4, 0, Math.PI * 2);
+      ctx.arc(e.x + 2 * e.width / 3, e.y + e.height / 3, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(e.x + e.width / 4, e.y + 2 * e.height / 3);
+      ctx.lineTo(e.x + 3 * e.width / 4, e.y + 2 * e.height / 3);
+      ctx.stroke();
+
+      ctx.font = 'bold 14px Arial';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(e.letter, e.x + e.width / 2, e.y + e.height / 2 + 5);
+    }
+
+    function updatePlayer() {
+      player.x += player.dx;
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+    }
+
+    function updateBullets() {
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        bullets[i].y -= bulletSpeed;
+        if (bullets[i].y < 0) bullets.splice(i, 1);
+      }
+    }
+
+    function updateEnemies() {
+      for (let e of enemies) {
+        e.x += e.speedX;
+        if (e.x <= 0 || e.x + e.width >= canvas.width) e.speedX *= -1;
+        if (e.y < player.y) e.y += e.speedY;
+
+        if (
+          e.x < player.x + player.width &&
+          e.x + e.width > player.x &&
+          e.y < player.y + player.height &&
+          e.y + e.height > player.y
+        ) {
+          createExplosion(player.x + player.width / 2, player.y + player.height / 2);
+          showFeedback("Errado! Fim de jogo.", 'red');
+          setTimeout(endGame, 600);
+        }
+      }
+    }
+
+    function detectCollisions() {
+      for (let b of bullets) {
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          let e = enemies[i];
+          if (
+            b.x < e.x + e.width &&
+            b.x + 3 > e.x &&
+            b.y < e.y + e.height &&
+            b.y + 12 > e.y
+          ) {
+            bullets.splice(bullets.indexOf(b), 1);
+            createExplosion(e.x + e.width / 2, e.y + e.height / 2);
+
+            if (e.letter === currentQuestion.c) {
+              showFeedback("Correto!", '#0f0');
+              score += 100;
+              scoreDisplay.textContent = `Pontuação: ${score}`;
+              setTimeout(() => {
+                loadQuestion();
+                spawnEnemies();
+              }, 600);
+            } else {
+              showFeedback("Errado! Fim de jogo.", 'red');
+              setTimeout(endGame, 600);
+            }
+          }
+        }
+      }
+    }
+
+    function endGame() {
+      gameRunning = false;
+      finalScoreDisplay.textContent = `Sua pontuação: ${score}`;
+      gameOverDisplay.style.display = 'block';
+    }
+
+    function resetGame() {
+      player.x = canvas.width / 2 - 20;
+      player.dx = 0;
+      bullets = [];
+      particles = [];
+      score = 0;
+      scoreDisplay.textContent = 'Pontuação: 0';
+      gameOverDisplay.style.display = 'none';
+      gameRunning = true;
+      loadQuestion();
+      spawnEnemies();
+      gameLoop();
+    }
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawPlayer();
+      drawBullets();
+      enemies.forEach(drawEnemy);
+      drawParticles();
+
+      updatePlayer();
+      updateBullets();
+      updateEnemies();
+      detectCollisions();
+      updateParticles();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Controles com setinhas (cetinhas)
+    function shoot() {
+      if (!gameRunning) return;
+      bullets.push({ x: player.x + player.width / 2, y: player.y });
+    }
+
+    // Botões de seta e tiro
+    leftBtn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      player.dx = -player.speed;
+    });
+    leftBtn.addEventListener('touchend', e => {
+      e.preventDefault();
+      if (player.dx < 0) player.dx = 0;
+    });
+
+    rightBtn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      player.dx = player.speed;
+    });
+    rightBtn.addEventListener('touchend', e => {
+      e.preventDefault();
+      if (player.dx > 0) player.dx = 0;
+    });
+
+    fireBtn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      shoot();
+    });
+
+    // Suporte para cliques (desktop e alguns navegadores)
+    leftBtn.addEventListener('mousedown', () => { player.dx = -player.speed; });
+    leftBtn.addEventListener('mouseup', () => { if (player.dx < 0) player.dx = 0; });
+    rightBtn.addEventListener('mousedown', () => { player.dx = player.speed; });
+    rightBtn.addEventListener('mouseup', () => { if (player.dx > 0) player.dx = 0; });
+    fireBtn.addEventListener('mousedown', shoot);
+
+    restartBtn.addEventListener('click', resetGame);
+
+    // Iniciar jogo
+    loadQuestion();
+    spawnEnemies();
+    gameLoop();
+  </script>
+</body>
+</html>
